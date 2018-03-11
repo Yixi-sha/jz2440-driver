@@ -14,13 +14,33 @@ static struct device* myLed_device = NULL;
 static int led_major = 0;
 static volatile unsigned  long* gpfcon = NULL;
 static volatile unsigned  long* gpfdat = NULL;
+static int led_min = 0;
 
-
-static int myLed_open(struct inode *inode, struct file *file)
+static int myLed_open(struct inode *r_inode, struct file *r_file)
 {
+	led_min = MINOR(r_inode->i_rdev);/**get the minor of dev**/
+	printk("led_minor is %d \n",led_min);
 	printk( "this is myLed_open\n");
-	(*gpfcon) &= (~( (0x3 << (4*2)) | (0x3 << (5*2)) | (0x3 << (6*2))));
-	(*gpfcon) |= ( (0x1 << (4*2)) | (0x1 << (5*2)) | (0x1 << (6*2)));
+	switch (led_min)
+	{
+		case 0:
+			(*gpfcon) &= (~( (0x3 << (4*2)) | (0x3 << (5*2)) | (0x3 << (6*2))));
+			(*gpfcon) |= ( (0x1 << (4*2)) | (0x1 << (5*2)) | (0x1 << (6*2)));
+			break;
+		case 1:
+			(*gpfcon) &= (~(0x3 << (4*2)));
+			(*gpfcon) |= ( (0x1 << (4*2)));
+			break;
+		case 2:
+			(*gpfcon) &= (~( 0x3 << (5*2)));
+			(*gpfcon) |= ( (0x1 << (5*2)));
+			break;
+		case 3:
+			(*gpfcon) &= (~( 0x3 << (6*2)));
+			(*gpfcon) |= ( (0x1 << (6*2)));
+			break;
+	}
+	
 	return 0;
 }
 
@@ -33,21 +53,49 @@ ssize_t  myLed_write (struct file* r_file, const char __user * r_user, size_t r_
 	printk( "val is %d \n ",val);
 	
 	if(val == 1)
-	{
-		(*gpfdat) &= (~((0x1 << 4) | (0x1 << 5) | (0x1 << 6) ));
+	{		
+		switch (led_min)
+		{
+		case 0:
+			(*gpfdat) &= (~((0x1 << 4) | (0x1 << 5) | (0x1 << 6) ));
+			break;
+		case 1:
+			(*gpfdat) &= (~((0x1 << 4)  ));
+			break;
+		case 2:
+			(*gpfdat) &= (~((0x1 << 5)  ));
+			break;
+		case 3:
+			(*gpfdat) &= (~((0x1 << 6)  ));
+			break;
+		}
 	}
 	else
 	{
-		(*gpfdat) |= ( (0x1 << 4) | (0x1 << 5) | (0x1 << 6) );
+		
+		switch (led_min)
+		{
+		case 0:
+			(*gpfdat) |= ( (0x1 << 4) | (0x1 << 5) | (0x1 << 6) );
+			break;
+		case 1:
+			(*gpfdat) |= ( (0x1 << 4)  );
+			break;
+		case 2:
+			(*gpfdat) |= ( (0x1 << 5)  );
+			break;
+		case 3:
+			(*gpfdat) |= ( (0x1 << 6)  );
+			break;
+		}
 	}
 	
 	return 0;
 }
 
 /***define char driver file operation ***/
-struct file_operations myLed_fso = 
+static struct file_operations myLed_fso = 
 {
-	.owner = "yixi-sha",
 	.open		= myLed_open,
 	.write      = myLed_write,
 
@@ -58,6 +106,7 @@ struct file_operations myLed_fso =
 /*** init function   **/
 static int myLed_init (void)
 {
+	int minor = 0;
 	led_major = register_chrdev(0, "yixi-sha led", &myLed_fso); /*  register char driver */
 	printk("register_chrdev ret is %d \n", led_major);
 
@@ -68,6 +117,13 @@ static int myLed_init (void)
 	myLed_device = device_create(myLed_class, NULL, MKDEV(led_major, 0), NULL, "myLed"); /*create device node*/
 	if (IS_ERR(myLed_device))
 		return PTR_ERR(myLed_device);
+
+	for(minor = 1; minor <= 3; minor++)
+	{
+		myLed_device = device_create(myLed_class, NULL, MKDEV(led_major, minor), NULL, "myLed%d",minor); /*create device node*/
+		if (IS_ERR(myLed_device))
+			return PTR_ERR(myLed_device);
+	}
 
 	gpfcon = (volatile unsigned long*)ioremap(0x56000050, 16);
 	gpfdat = gpfcon + 1;

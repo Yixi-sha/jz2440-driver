@@ -8,20 +8,21 @@ int main(int argc,char** argv)
 {
     int fd = 0;
     int val = 0;
-    fd = open("/dev/myLed", O_RDWR);
-    if(fd < 0)
+    printf("open this file \n");
+    if(argc != 3)
     {
-        printf("can't open this file \n");
-    }
-    if(argc != 2)
-    {
-        printf("plase chose <on or off> \n");
+        printf("plase chose <ptah> <on or off> \n");
     }
     else
     {
-        if(fd > 0 )
+        fd = open(argv[1], O_RDWR);
+        if(fd < 0)
         {
-            if(strcmp(argv[1],"on") == 0)
+            printf("can't open this file \n");
+        }
+        else
+        {
+            if(strcmp(argv[2],"on") == 0)
             {
                 val = 1;
             }
@@ -29,9 +30,7 @@ int main(int argc,char** argv)
             {
                 val = 0;
             }
-            write(fd,&val,4);
-            
-            
+            write(fd,&val,4);     
         }
         
     }
