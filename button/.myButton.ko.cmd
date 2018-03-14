@@ -1,0 +1,1 @@
+cmd_/home/yixi/work/study/JZ2440/jzdrivers/button/myButton.ko := arm-linux-ld -EL -r  -T /home/yixi/work/study/JZ2440/linux-3.4.2/scripts/module-common.lds --build-id  -o /home/yixi/work/study/JZ2440/jzdrivers/button/myButton.ko /home/yixi/work/study/JZ2440/jzdrivers/button/myButton.o /home/yixi/work/study/JZ2440/jzdrivers/button/myButton.mod.o
