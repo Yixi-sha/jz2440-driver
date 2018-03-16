@@ -19,17 +19,20 @@
 #include <linux/signal.h>
 #include <linux/semaphore.h>
 #include <linux/atomic.h>
+#include <linux/timer.h>
 
 
 static DECLARE_WAIT_QUEUE_HEAD(myButton_wait); /**wait queue**/
 static volatile int ev_press = 0;
 
 
-static dev_t	button_major = 0;
+static dev_t button_major = 0;
 
 static struct class* myButton_class = NULL;
 static struct device* myButton_device = NULL;
 static atomic_t  fCount  = ATOMIC_INIT(0);
+
+static struct timer_list myButtonTimer;
 
 struct pinDesc{
 	unsigned int pin;
@@ -50,43 +53,19 @@ static unsigned char keyVal[4] =
 
 static struct fasync_struct *myButton_fasync;
 
+
+static struct pinDesc *irqPin = NULL;
+
+
+
+
 static irqreturn_t myButton_irq(int irq, void *dev_id)
 {
-	struct pinDesc *irqPin = dev_id;
-	unsigned int status = s3c2410_gpio_getpin(irqPin->pin);
-	
-	if(irqPin->pin == S3C2410_GPF(0))
-	{
-		if(status)
-			keyVal[0] = 0;
-		else
-			keyVal[0] = 1;
-	}
-	else if(irqPin->pin == S3C2410_GPF(2))
-	{
-		if(status)
-			keyVal[1] = 0;
-		else
-			keyVal[1] = 1;
-	}
-	else if(irqPin->pin == S3C2410_GPG(3))
-	{
-		if(status)
-			keyVal[2] = 0;
-		else
-			keyVal[2] = 1;
-	}
-	else if(irqPin->pin == S3C2410_GPG(11))
-	{
-		if(status)
-			keyVal[3] = 0;
-		else
-			keyVal[3] = 1;
-	}
-	//printk(" %d %d %d %d ", keyVal[0], keyVal[1], keyVal[2], keyVal[3]);
-	ev_press = 1; 
-	wake_up_interruptible(&myButton_wait);   
-	kill_fasync(&myButton_fasync, SIGIO, POLLIN);
+	/**10ms  HZ is 1s*/\
+	irqPin = dev_id;				   	
+	mod_timer(&myButtonTimer, jiffies + HZ/100);
+
+
 	return IRQ_HANDLED;
 }
 
@@ -140,7 +119,7 @@ static ssize_t myButton_read (struct file *r_lfie, char __user *r_user, size_t r
 	{
 		return -EINVAL;
 	}
-	wait_event_interruptible(myButton_wait, ev_press);
+//	wait_event_interruptible(myButton_wait, ev_press);
 	ret = copy_to_user(r_user, keyVal, sizeof(keyVal));
 	ev_press = 0;
 	return sizeof(keyVal);
@@ -193,12 +172,61 @@ static struct file_operations mybutton_fso =
 	.read  = myButton_read,
 	.poll = myButton_poll,
 	.fasync = myButton_Fasync,
+	.llseek = no_llseek,
 };
 
 struct cdev myButtonDev = {
 	.owner = THIS_MODULE,
 	.ops = &mybutton_fso,
 	};
+
+
+
+static void myButton_timer(unsigned long data)
+{
+	unsigned int status = 0;
+	if(irqPin == NULL)
+	{
+		return;
+	}
+	status = s3c2410_gpio_getpin(irqPin->pin);
+
+	
+	
+	if(irqPin->pin == S3C2410_GPF(0))
+	{
+		if(status)
+			keyVal[0] = 0;
+		else
+			keyVal[0] = 1;
+	}
+	else if(irqPin->pin == S3C2410_GPF(2))
+	{
+		if(status)
+			keyVal[1] = 0;
+		else
+			keyVal[1] = 1;
+	}
+	else if(irqPin->pin == S3C2410_GPG(3))
+	{
+		if(status)
+			keyVal[2] = 0;
+		else
+			keyVal[2] = 1;
+	}
+	else if(irqPin->pin == S3C2410_GPG(11))
+	{
+		if(status)
+			keyVal[3] = 0;
+		else
+			keyVal[3] = 1;
+	}
+	//printk(" %d %d %d %d ", keyVal[0], keyVal[1], keyVal[2], keyVal[3]);
+	ev_press = 1; 
+//	wake_up_interruptible_all(&myButton_wait);   
+	irqPin = NULL;
+	kill_fasync(&myButton_fasync, SIGIO, POLLIN);	
+}
 
 
 /*** init function   **/
@@ -209,6 +237,11 @@ static int __init myButton_init (void)
 	/**system auto 256 minor num of dev_t**/
 	/*button_major = register_chrdev(button_major, "yixi-sha Button", &mybutton_fso); */ /*  register char driver */
 
+	/*timer*/
+	init_timer(&myButtonTimer);
+	myButtonTimer.function = myButton_timer;		/* add timer handler function*/
+	add_timer(&myButtonTimer); /***add a timer**/
+	
 	ret = alloc_chrdev_region(&button_major, 0, 1, "myButton");
 	printk("button_major is %d \n", MAJOR(button_major));
 	cdev_init(&myButtonDev, &mybutton_fso);
@@ -233,6 +266,7 @@ static int __init myButton_init (void)
 
 static void  __exit myButton_exit (void) 
 {
+	del_timer(&myButtonTimer);
 	device_del(myButton_device);
 	class_destroy(myButton_class);
 	/*unregister_chrdev(button_major, "yixi-sha Button");*/

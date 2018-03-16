@@ -10,16 +10,22 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+int fd = 0;
+unsigned char key_val[4];
+
 void my_signal_fun(int signal)
 {
     printf("signal %d\n",signal);
+    read(fd, key_val, sizeof(key_val));
+   
+    printf("%d is %d %d %d %d\n", getpid(),key_val[0], key_val[1], key_val[2], key_val[3]);
 }
 
 int main(int argc,char** argv)
 {
-    int fd = 0;
+   
     int val = 0;
-    unsigned char key_val[4];
+    
     int ret;
     struct pollfd pFd;
     int Oflags = 0;
@@ -37,9 +43,9 @@ int main(int argc,char** argv)
     fcntl(fd, F_SETFL, Oflags| FASYNC);
     pFd.fd = fd;
     pFd.events = POLLIN;
-    /*while(1)
+    while(1)
     {
-        ret =  poll(&pFd, 1, 5000);
+    /*    ret =  poll(&pFd, 1, 5000);
         if(ret == 0)
         {
             printf("time out\n");
@@ -53,9 +59,8 @@ int main(int argc,char** argv)
             }
         }
         
-        
-    }*/
-    sleep(5);
+      */  
+    }
     close(fd);
     
 
